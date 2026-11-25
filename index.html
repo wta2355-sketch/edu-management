@@ -72,6 +72,16 @@ h4{margin:0}
 /* ---------- 도구줄 ---------- */
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
 .toolbar .grow{flex:1}
+.msel{position:relative}
+.msel>summary{list-style:none;cursor:pointer;padding:8px 32px 8px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--card);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;position:relative;min-height:36px}
+.msel>summary::-webkit-details-marker{display:none}
+.msel>summary::after{content:'▾';position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--mute);font-size:12px}
+.msel.on>summary{border-color:var(--c);background:var(--c2);color:var(--cdark);font-weight:600}
+.msel .mpanel{position:absolute;z-index:30;left:0;top:calc(100% + 4px);min-width:240px;max-width:min(360px,92vw);max-height:340px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--shadow);padding:6px}
+.msel .mpanel label{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;line-height:1.35}
+.msel .mpanel label:hover{background:var(--line2)}
+.msel .mpanel input{margin-top:2px}
+.msel .mpanel .btn{margin:6px 4px 2px}
 .chipline{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 18px}
 .chipline .b{font-size:12.5px;padding:4px 11px}
 .stat-pill{background:var(--okbg);color:var(--ok);border-radius:999px;padding:8px 16px;font-size:14px;white-space:nowrap} .stat-pill b{font-size:20px}
@@ -1074,7 +1084,7 @@ let conf = Object.assign({mode:'local', apiUrl:'https://hwangchon-edu-b386a-defa
 /* 링크로 접근키 자동 입력: …/edu-management/#k=접근키 (주소 # 뒤 값은 서버로 전송되지 않고, 입력 후 주소창에서 지워집니다) */
 (function(){ try{ const m=/[#&]k=([A-Za-z0-9_-]{12,})/.exec(location.hash); if(m){ conf.key=m[1]; saveJSON(K.conf,conf); history.replaceState(null,'',location.pathname+location.search); } }catch(e){} })();
 let state, pending=[];
-const ui = { area:'global', gtab:'home', ptab:'dashboard', pid:'', tid:'all', cohort:{}, status:'all', pfilter:'', q:'', ckq:'', sort:{key:'appliedAt',dir:1}, sel:new Set(), mask:false, needsRender:false, depFilter:'all', open:{}, tplId:'', roomDraft:null, year:'all', peopleQ:'', notice:'' };
+const ui = { area:'global', gtab:'home', ptab:'dashboard', pid:'', tid:'all', cohort:{}, status:[], pfilter:[], pcoh:{}, mOpen:'', q:'', ckq:'', sort:{key:'appliedAt',dir:1}, sel:new Set(), mask:false, needsRender:false, depFilter:'all', open:{}, tplId:'', roomDraft:null, year:'all', peopleQ:'', notice:'' };
 (function(){ const u=loadJSON(K.ui,SS)||loadJSON(K.ui); if(u){ ['area','gtab','ptab','pid','tid','year'].forEach(k=>{ if(u[k]!=null) ui[k]=u[k]; }); } })();
 function saveUi(){ const v={area:ui.area,gtab:ui.gtab,ptab:ui.ptab,pid:ui.pid,tid:ui.tid,year:ui.year}; saveJSON(K.ui,v,SS); saveJSON(K.ui,v); }
 let saving=false, saveAgain=false, lastSaveErr='';
@@ -1443,10 +1453,10 @@ document.addEventListener('toggle',e=>{ const d=e.target; if(d && d.dataset && d
 ACT.gtab=el=>{ ui.area='global'; ui.gtab=el.dataset.tab; ui.sel.clear(); render(); window.scrollTo(0,0); };
 ACT.toProg=()=>{ ui.area='program'; render(); };
 ACT.ptab=el=>{ ui.area='program'; ui.ptab=el.dataset.tab; ui.sel.clear(); render(); window.scrollTo(0,0); };
-ACT.track=el=>{ ui.tid=el.dataset.tid; ui.sel.clear(); ui.pfilter=''; render(); };
+ACT.track=el=>{ ui.tid=el.dataset.tid; ui.sel.clear(); ui.pfilter=[]; render(); };
 ACT.dismissNotice=()=>{ ui.notice=''; render(); };
 CHG.cohort=el=>{ ui.cohort[cohortKey()]=el.value; ui.sel.clear(); render(); };
-function openProgram(pid,tab){ ui.pid=pid; ui.tid='all'; ui.area='program'; ui.ptab=tab||'dashboard'; ui.sel.clear(); ui.pfilter=''; ui.q=''; ui.ckq=''; render(); window.scrollTo(0,0); }
+function openProgram(pid,tab){ ui.pid=pid; ui.tid='all'; ui.area='program'; ui.ptab=tab||'dashboard'; ui.sel.clear(); ui.pfilter=[]; ui.status=[]; delete ui.pcoh[cohortKey()]; ui.q=''; ui.ckq=''; render(); window.scrollTo(0,0); }
 ACT.openProg=el=>openProgram(el.dataset.pid, el.dataset.tab);
 
 /* =================== 사업 안 화면 =================== */
@@ -1551,8 +1561,8 @@ function targetCard(prog,st){
   if(!rows.length) return `<div class="infobox row"><span>성과 목표가 없습니다. 목표(참여 인원·수료율·만족도 등)를 정하면 달성률을 자동으로 계산합니다.</span><button class="btn sm" data-act="ptab" data-tab="setup">목표 정하기</button></div>`;
   return `<div class="card"><h3>성과 목표 달성</h3><div class="targets">${rows.map(r=>`<div class="tg"><div class="note">${esc(r[0])}</div><div class="big">${esc(r[1])}<small> / 목표 ${esc(r[2])}</small></div><div class="bar ${r[3]>=100?'okbar':''}"><i style="width:${Math.min(100,r[3]||0)}%"></i></div><div class="note"><b>${r[3]==null?'-':r[3]+'%'}</b> 달성</div></div>`).join('')}</div></div>`;
 }
-ACT.goList=el=>{ ui.cohort[cohortKey()]=el.dataset.cohort; ui.pfilter=''; ui.status='all'; ui.ptab='participants'; render(); };
-ACT.goFilter=el=>{ ui.pfilter=el.dataset.f; ui.cohort[cohortKey()]='all'; ui.status='all'; ui.q=''; ui.ptab='participants'; render(); };
+ACT.goList=el=>{ ui.cohort[cohortKey()]=el.dataset.cohort; delete ui.pcoh[cohortKey()]; ui.pfilter=[]; ui.status=[]; ui.ptab='participants'; render(); };
+ACT.goFilter=el=>{ ui.pfilter=[el.dataset.f]; ui.cohort[cohortKey()]='all'; delete ui.pcoh[cohortKey()]; ui.status=[]; ui.q=''; ui.ptab='participants'; render(); };
 ACT.promote=async el=>{
   const c=coll('cohorts')[el.dataset.cohort]; if(!c) return;
   const vac=vacancy(c); const {list:wl,skipped}=promotable(c);
@@ -1571,11 +1581,18 @@ function backupNotice(){
 
 /* ---------------- 참여자 ---------------- */
 function listFields(prog,tid){ return fieldsOf(prog.id,tid).filter(f=>f.list); }
+/* 참여자 목록 다중 선택 필터 (회차·상태·점검 필터: 같은 칸 안에서는 하나라도 맞으면 표시, 칸끼리는 모두 맞아야 표시) */
+function selCohorts(){ const cs=cohortsOf(ui.pid,curTid()); const a=ui.pcoh[cohortKey()]; if(Array.isArray(a)) return a.filter(id=>cs.some(c=>c.id===id)); const d=defaultCohort(true); return d==='all'?[]:[d]; }
+function msel(g,allLabel,items,sel){
+  const n=sel.length, first=(items.find(i=>i.id===sel[0])||{}).label||allLabel;
+  const text=n===0?allLabel:(n===1?first:`${first} 외 ${n-1}`);
+  return `<details class="msel ${n?'on':''}" data-g="${g}" ${ui.mOpen===g?'open':''}><summary>${esc(text)}</summary><div class="mpanel">${items.map(i=>`<label><input type="checkbox" data-chg="mSel" data-g="${g}" data-v="${esc(i.id)}" ${sel.includes(i.id)?'checked':''}> <span>${esc(i.label)}</span></label>`).join('')}${n?`<button class="btn sm ghost" data-act="mClear" data-g="${g}">선택 해제</button>`:''}</div></details>`;
+}
 function filteredParts(){
-  const prog=P(), tid=curTid(), cid=defaultCohort(true);
-  let ps=partsOf(prog.id,tid); if(cid!=='all') ps=ps.filter(p=>p.cohortId===cid);
-  if(ui.status==='active') ps=ps.filter(isActive); else if(ui.status!=='all') ps=ps.filter(p=>p.status===ui.status);
-  if(ui.pfilter) ps=ps.filter(filterFn(ui.pfilter,prog));
+  const prog=P(), tid=curTid(), cids=selCohorts();
+  let ps=partsOf(prog.id,tid); if(cids.length) ps=ps.filter(p=>cids.includes(p.cohortId));
+  if(ui.status.length) ps=ps.filter(p=>ui.status.some(st=>st==='active'?isActive(p):p.status===st));
+  { const Fk=filtersFor(prog); const fns=ui.pfilter.filter(k=>Fk[k]).map(k=>filterFn(k,prog)); if(fns.length) ps=ps.filter(p=>fns.some(f=>f(p))); }
   const q=normQ(ui.q);
   if(q){ const qd=digits(q); const fs=fieldsOf(prog.id,'all').filter(f=>['text','textarea'].includes(f.type)); ps=ps.filter(p=>[p.name,p.org,p.region,p.email,p.memo,p.depositor,p.groupName,p.couponNo,...fs.map(f=>fval(p,f))].some(v=>textHas(v,q)) || (qd.length>=3 && qd.length===q.replace(/[\s-]/g,'').length && normPhone(p.phone).includes(qd))); }
   const k=ui.sort.key, d=ui.sort.dir;
@@ -1594,9 +1611,9 @@ VIEWS.participants=()=>{
   if(!cs.length) return head+noCohorts();
   const cid=defaultCohort(true), ps=filteredParts(), dups=dupIds(prog.id), F=filtersFor(prog), lf=listFields(prog,tid);
   const th=(k,label,cls)=>`<th class="sortable ${cls||''}" data-act="sort" data-k="${k}">${esc(label)}${ui.sort.key===k?(ui.sort.dir>0?' ▲':' ▼'):''}</th>`;
-  let h=head+`<div class="toolbar">${cohortSelect(cid,true)}
-    <select id="p-status" data-chg="pStatus"><option value="all">모든 상태</option><option value="active" ${ui.status==='active'?'selected':''}>참여(접수+확정)</option>${optList('status').map(o=>`<option value="${o.id}" ${ui.status===o.id?'selected':''}>${esc(o.label)}</option>`).join('')}</select>
-    <select id="p-filter" data-chg="pFilter"><option value="">점검 필터 없음</option>${Object.keys(F).map(k=>`<option value="${k}" ${ui.pfilter===k?'selected':''}>${esc(F[k].label)}</option>`).join('')}</select>
+  let h=head+`<div class="toolbar">${msel('coh','전체 회차',cs.map(c=>({id:c.id,label:cohortLabel(c)})),selCohorts())}
+    ${msel('st','모든 상태',[{id:'active',label:'참여(접수+확정)'}].concat(optList('status').map(o=>({id:o.id,label:o.label}))),ui.status)}
+    ${msel('pf','점검 필터 없음',Object.keys(F).map(k=>({id:k,label:F[k].label})),ui.pfilter.filter(k=>F[k]))}
     <select id="p-sort" data-chg="pSort" title="정렬"><option value="appliedAt" ${ui.sort.key==='appliedAt'?'selected':''}>신청 순</option><option value="wait" ${ui.sort.key==='wait'?'selected':''}>대기 순번 순</option><option value="name" ${ui.sort.key==='name'?'selected':''}>이름 순</option><option value="cohort" ${ui.sort.key==='cohort'?'selected':''}>회차 순</option><option value="status" ${ui.sort.key==='status'?'selected':''}>상태 순</option></select>
     <input type="search" id="p-search" data-inp="pSearch" placeholder="검색 (이름·소속·전화 뒷자리·초성)" value="${esc(ui.q)}" style="min-width:220px;flex:1;max-width:340px"></div>`;
   if(ui.sel.size){
@@ -1609,7 +1626,7 @@ VIEWS.participants=()=>{
       ${mod(prog,'cert')?`<button class="btn sm" data-act="bulkFlag" data-k="certIssued">수료증 발급 표시</button>`:''}
       <button class="btn sm danger" data-act="bulkDelete">삭제</button><button class="btn sm ghost" data-act="selClear">선택 해제</button></div>`;
   }
-  if(ui.pfilter && F[ui.pfilter]) h+=`<div class="infobox">점검 필터: <b>${esc(F[ui.pfilter].label)}</b> — ${ps.length}명 <button class="btn sm" data-act="clearFilter">필터 해제</button></div>`;
+  if(ui.pfilter.some(k=>F[k])) h+=`<div class="infobox">점검 필터: <b>${esc(ui.pfilter.filter(k=>F[k]).map(k=>F[k].label).join(' / '))}</b> — ${ps.length}명 <button class="btn sm" data-act="clearFilter">필터 해제</button></div>`;
   // 비어 있는 열은 숨김 (내용이 한 명이라도 생기면 자동으로 나타남)
   const anyP=fn=>ps.some(fn); const hid=[];
   const cols=[]; if(coreOn(prog,'region')){ if(anyP(p=>p.region)) cols.push(['region',L('f.region')]); else hid.push(L('f.region')); } if(coreOn(prog,'org')){ if(anyP(p=>p.org)) cols.push(['org',L('f.org')]); else hid.push(L('f.org')); }
@@ -1640,11 +1657,20 @@ VIEWS.participants=()=>{
   h+=`<p class="note">표시 ${ps.length}명 · 이 사업 전체 ${partsOf(prog.id).length}명</p>`;
   return h;
 };
-CHG.pStatus=el=>{ ui.status=el.value; if(el.value==='waitlist'&&ui.sort.key==='appliedAt') ui.sort={key:'wait',dir:1}; ui.sel.clear(); render(); };
-CHG.pFilter=el=>{ ui.pfilter=el.value; ui.sel.clear(); render(); };
+function mGet(g){ return g==='coh'?selCohorts().slice():g==='st'?ui.status.slice():ui.pfilter.slice(); }
+function mSet(g,arr){
+  if(g==='coh'){ ui.pcoh[cohortKey()]=arr; ui.cohort[cohortKey()]=arr.length===1?arr[0]:'all'; }
+  else if(g==='st'){ ui.status=arr; if(arr.length===1&&arr[0]==='waitlist'&&ui.sort.key==='appliedAt') ui.sort={key:'wait',dir:1}; }
+  else ui.pfilter=arr;
+  ui.mOpen=g; ui.sel.clear(); render();
+}
+CHG.mSel=el=>{ const g=el.dataset.g, v=el.dataset.v; let a=mGet(g); a=el.checked?(a.includes(v)?a:a.concat(v)):a.filter(x=>x!==v); mSet(g,a); };
+ACT.mClear=el=>{ mSet(el.dataset.g,[]); };
+document.addEventListener('toggle',e=>{ const d=e.target; if(!d||!d.classList||!d.classList.contains('msel')) return; if(d.open) ui.mOpen=d.dataset.g; else if(ui.mOpen===d.dataset.g) ui.mOpen=''; },true);
+document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.msel')) return; if(!ui.mOpen) return; ui.mOpen=''; document.querySelectorAll('details.msel[open]').forEach(d=>{ d.open=false; }); });
 INP.pSearch=el=>{ ui.q=el.value; render(); };
 CHG.pSort=el=>{ ui.sort={key:el.value,dir:1}; render(); };
-ACT.clearFilter=()=>{ ui.pfilter=''; render(); };
+ACT.clearFilter=()=>{ ui.pfilter=[]; render(); };
 ACT.sort=el=>{ const k=el.dataset.k; if(ui.sort.key===k) ui.sort.dir*=-1; else ui.sort={key:k,dir:1}; render(); };
 CHG.selAll=el=>{ const ps=filteredParts(); if(el.checked) ps.forEach(p=>ui.sel.add(p.id)); else ui.sel.clear(); render(); };
 CHG.selOne=el=>{ if(el.checked) ui.sel.add(el.dataset.id); else ui.sel.delete(el.dataset.id); render(); };
@@ -3028,7 +3054,7 @@ GVIEWS.home=()=>{
   if(done.length) h+=`<div class="sec-h"><h3>끝난 사업 (정산·보고)</h3></div><div class="pcards">${done.slice(0,3).map(progCard).join('')}</div>`;
   return h;
 };
-ACT.homeGo=el=>{ const pid=el.dataset.pid; if(el.dataset.f){ openProgram(pid,'participants'); ui.pfilter=el.dataset.f; ui.cohort[cohortKey()]='all'; ui.status='all'; render(); } else openProgram(pid,el.dataset.tab||'dashboard'); };
+ACT.homeGo=el=>{ const pid=el.dataset.pid; if(el.dataset.f){ openProgram(pid,'participants'); ui.pfilter=[el.dataset.f]; ui.cohort[cohortKey()]='all'; delete ui.pcoh[cohortKey()]; ui.status=[]; render(); } else openProgram(pid,el.dataset.tab||'dashboard'); };
 ACT.perfYear=el=>{ ui.year=el.dataset.y; ui.area='global'; ui.gtab='perf'; render(); window.scrollTo(0,0); };
 ACT.home=()=>{ ui.area='global'; ui.gtab='home'; ui.sel.clear(); render(); window.scrollTo(0,0); };
 
