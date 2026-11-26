@@ -838,13 +838,13 @@ const DEFAULT_LABELS = {
   'f.privacy':'개인정보 수집·이용 동의', 'f.marketing':'다음 프로그램 안내 수신 동의', 'f.diet':'식사 특이사항(알레르기·채식 등)', 'f.car':'차량 이용(주차 필요)', 'f.memo':'메모',
   'f.depositPaid':'보증금 입금 확인', 'f.depositDate':'입금일', 'f.depositor':'입금자명', 'f.refundBank':'환불 은행', 'f.refundAccount':'환불 계좌번호',
   'f.refundHolder':'예금주', 'f.refundStatus':'환불 상태', 'f.refundDate':'환불일', 'f.refundMemo':'환불 메모',
-  'f.checkedIn':'현장 등록(체크인)', 'f.room':'배정 숙소', 'f.notice':'사전 안내 발송', 'f.score':'만족도(5점)', 'f.comment':'의견', 'f.cert':'수료증 발급', 'f.groupName':'단체명', 'f.headcount':'인원 수'
+  'f.checkedIn':'현장 등록(체크인)', 'f.room':'배정 숙소', 'f.notice':'사전 안내 발송', 'f.smsApply':'입금 안내 문자', 'f.smsConfirm':'확정 문자', 'f.score':'만족도(5점)', 'f.comment':'의견', 'f.cert':'수료증 발급', 'f.groupName':'단체명', 'f.headcount':'인원 수'
 };
 const LABEL_GROUPS_GLOBAL = [
   {title:'프로그램·기관 이름', keys:['app.title','org.name']},
   {title:'상단 메뉴', keys:GTABS.map(t=>'g.'+t)},
   {title:'기본 항목 이름 (모든 사업 공통 기본값)', keys:['f.name','f.phone','f.gender','f.age','f.region','f.org','f.email','f.track','f.cohort','f.status','f.appliedAt','f.source','f.privacy','f.marketing','f.diet','f.car','f.memo']},
-  {title:'보증금·현장·사후 항목', keys:['f.depositPaid','f.depositDate','f.depositor','f.refundBank','f.refundAccount','f.refundHolder','f.refundStatus','f.refundDate','f.refundMemo','f.checkedIn','f.room','f.notice','f.score','f.comment','f.cert','f.groupName','f.headcount']}
+  {title:'보증금·현장·사후 항목', keys:['f.depositPaid','f.depositDate','f.depositor','f.refundBank','f.refundAccount','f.refundHolder','f.refundStatus','f.refundDate','f.refundMemo','f.checkedIn','f.room','f.notice','f.smsApply','f.smsConfirm','f.score','f.comment','f.cert','f.groupName','f.headcount']}
 ];
 const DEFAULT_OPTIONS = {
   status:[{id:'applied',label:'신청접수'},{id:'confirmed',label:'참가확정'},{id:'waitlist',label:'대기'},{id:'cancelled',label:'취소'},{id:'noshow',label:'불참(노쇼)'}],
@@ -1091,7 +1091,7 @@ let conf = Object.assign({mode:'local', apiUrl:'https://hwangchon-edu-b386a-defa
 /* 링크로 접근키 자동 입력: …/edu-management/#k=접근키 (주소 # 뒤 값은 서버로 전송되지 않고, 입력 후 주소창에서 지워집니다) */
 (function(){ try{ const m=/[#&]k=([A-Za-z0-9_-]{12,})/.exec(location.hash); if(m){ conf.key=m[1]; saveJSON(K.conf,conf); history.replaceState(null,'',location.pathname+location.search); } }catch(e){} })();
 let state, pending=[];
-const ui = { area:'global', gtab:'home', ptab:'dashboard', pid:'', tid:'all', cohort:{}, status:[], pfilter:[], pcoh:{}, dep:[], mOpen:'', hfOpen:'', hfAt:0, q:'', ckq:'', sort:{key:'appliedAt',dir:1}, sel:new Set(), mask:false, needsRender:false, depFilter:'all', open:{}, tplId:'', roomDraft:null, year:'all', peopleQ:'', notice:'' };
+const ui = { area:'global', gtab:'home', ptab:'dashboard', pid:'', tid:'all', cohort:{}, status:[], pfilter:[], pcoh:{}, dep:[], sa:[], sc:[], mOpen:'', hfOpen:'', hfAt:0, q:'', ckq:'', sort:{key:'appliedAt',dir:1}, sel:new Set(), mask:false, needsRender:false, depFilter:'all', open:{}, tplId:'', roomDraft:null, year:'all', peopleQ:'', notice:'' };
 (function(){ const u=loadJSON(K.ui,SS)||loadJSON(K.ui); if(u){ ['area','gtab','ptab','pid','tid','year'].forEach(k=>{ if(u[k]!=null) ui[k]=u[k]; }); } })();
 function saveUi(){ const v={area:ui.area,gtab:ui.gtab,ptab:ui.ptab,pid:ui.pid,tid:ui.tid,year:ui.year}; saveJSON(K.ui,v,SS); saveJSON(K.ui,v); }
 let saving=false, saveAgain=false, lastSaveErr='';
@@ -1607,11 +1607,22 @@ function hfCell(g,label,sortKey,items,sel){
 }
 function hfTh(prog){ return hfCell('st',L('f.status'),'status',STATUS_ITEMS(),ui.status); }
 function hfDepTh(prog){ return hfCell('dp',L('sec.deposit'),'',DEP_ITEMS,ui.dep); }
+/* 문자 발송 체크 열 (입금 안내 문자 / 확정 문자) */
+const SMS_ITEMS=[{id:'no',label:'미발송'},{id:'yes',label:'발송완료'}];
+const SMS_COLS={sa:{k:'smsApply',short:'입금안내'},sc:{k:'smsConfirm',short:'확정문자'}};
+function smsFilterOk(p,k,sel){ return !sel.length||sel.some(v=>v==='yes'?!!p[k]:!p[k]); }
+function smsBtn(p,k){ const on=!!p[k]; const lb=k==='smsApply'?'입금 안내 문자':'확정 문자';
+  return `<button type="button" class="bbtn ${on?'c':'warn'}" data-act="smsTog" data-id="${esc(p.id)}" data-k="${k}" title="${on?esc(lb)+' 발송 표시'+(p[k+'At']?' ('+esc(p[k+'At'].slice(0,16))+')':'')+' — 누르면 취소':esc(lb)+' — 누르면 발송완료로 표시'}">${on?'발송✓':'미발송'}</button>`; }
+ACT.smsTog=el=>{ const p=coll('participants')[el.dataset.id]; if(!p) return; const k=el.dataset.k; if(k!=='smsApply'&&k!=='smsConfirm') return; const on=!p[k];
+  const lb=k==='smsApply'?'입금 안내 문자':'확정 문자';
+  commit([{op:'patch',c:'participants',id:p.id,f:{[k]:on,[k+'At']:on?nowStr():''}}],`${p.name} ${lb} ${on?'발송완료':'발송표시 취소'}`,p.id); toast(`${p.name} · ${lb} ${on?'발송완료':'발송표시 취소'}`,'ok'); };
 function filteredParts(){
   const prog=P(), tid=curTid(), cids=selCohorts();
   let ps=partsOf(prog.id,tid); if(cids.length) ps=ps.filter(p=>cids.includes(p.cohortId));
   if(ui.status.length) ps=ps.filter(p=>ui.status.some(st=>st==='active'?isActive(p):p.status===st));
   if(ui.dep.length){ const dfs=ui.dep.filter(k=>DEP_FN[k]).map(k=>DEP_FN[k]); if(dfs.length) ps=ps.filter(p=>dfs.some(f=>f(p))); }
+  if(ui.sa.length) ps=ps.filter(p=>smsFilterOk(p,'smsApply',ui.sa));
+  if(ui.sc.length) ps=ps.filter(p=>smsFilterOk(p,'smsConfirm',ui.sc));
   { const Fk=filtersFor(prog); const fns=ui.pfilter.filter(k=>Fk[k]).map(k=>filterFn(k,prog)); if(fns.length) ps=ps.filter(p=>fns.some(f=>f(p))); }
   const q=normQ(ui.q);
   if(q){ const qd=digits(q); const fs=fieldsOf(prog.id,'all').filter(f=>['text','textarea'].includes(f.type)); ps=ps.filter(p=>[p.name,p.org,p.region,p.email,p.memo,p.depositor,p.groupName,p.couponNo,...fs.map(f=>fval(p,f))].some(v=>textHas(v,q)) || (qd.length>=3 && qd.length===q.replace(/[\s-]/g,'').length && normPhone(p.phone).includes(qd))); }
@@ -1634,6 +1645,7 @@ VIEWS.participants=()=>{
   let h=head+`<div class="toolbar">${msel('coh','전체 회차',cs.map(c=>({id:c.id,label:cohortLabel(c)})),selCohorts())}
     ${msel('st','모든 상태',[{id:'active',label:'참여(접수+확정)'}].concat(optList('status').map(o=>({id:o.id,label:o.label}))),ui.status)}
     ${mod(prog,'deposit')?msel('dp','보증금 전체',DEP_ITEMS,ui.dep):''}
+    ${msel('sa','입금안내 전체',SMS_ITEMS.map(i=>({id:i.id,label:'입금안내 '+i.label})),ui.sa)}${msel('sc','확정문자 전체',SMS_ITEMS.map(i=>({id:i.id,label:'확정문자 '+i.label})),ui.sc)}
     ${msel('pf','점검 필터 없음',Object.keys(F).map(k=>({id:k,label:F[k].label})),ui.pfilter.filter(k=>F[k]))}
     <select id="p-sort" data-chg="pSort" title="정렬"><option value="appliedAt" ${ui.sort.key==='appliedAt'?'selected':''}>신청 순</option><option value="wait" ${ui.sort.key==='wait'?'selected':''}>대기 순번 순</option><option value="name" ${ui.sort.key==='name'?'selected':''}>이름 순</option><option value="cohort" ${ui.sort.key==='cohort'?'selected':''}>회차 순</option><option value="status" ${ui.sort.key==='status'?'selected':''}>상태 순</option></select>
     <input type="search" id="p-search" data-inp="pSearch" placeholder="검색 (이름·소속·전화 뒷자리·초성)" value="${esc(ui.q)}" style="min-width:220px;flex:1;max-width:340px"></div>`;
@@ -1643,7 +1655,7 @@ VIEWS.participants=()=>{
       <select id="bulk-cohort"><option value="">회차 이동…</option>${cohortsOf(prog.id,'all').map(c=>`<option value="${esc(c.id)}">${esc(cohortLabel(c))}</option>`).join('')}</select>
       <button class="btn sm" data-act="bulkApply">적용</button><button class="btn sm" data-act="msgs">선택한 사람 안내 문자</button>
       ${mod(prog,'deposit')?`<button class="btn sm" data-act="bulkFlag" data-k="depositPaid">입금확인 표시</button>`:''}
-      <button class="btn sm" data-act="bulkFlag" data-k="noticeSent">안내발송 표시</button>${coreOn(prog,'privacy')?`<button class="btn sm" data-act="bulkFlag" data-k="privacy">동의 확인 표시</button>`:''}
+      <button class="btn sm" data-act="bulkFlag" data-k="smsApply">입금안내 발송표시</button><button class="btn sm" data-act="bulkFlag" data-k="smsConfirm">확정문자 발송표시</button><button class="btn sm" data-act="bulkFlag" data-k="noticeSent">안내발송 표시</button>${coreOn(prog,'privacy')?`<button class="btn sm" data-act="bulkFlag" data-k="privacy">동의 확인 표시</button>`:''}
       ${mod(prog,'cert')?`<button class="btn sm" data-act="bulkFlag" data-k="certIssued">수료증 발급 표시</button>`:''}
       <button class="btn sm danger" data-act="bulkDelete">삭제</button><button class="btn sm ghost" data-act="selClear">선택 해제</button></div>`;
   }
@@ -1657,7 +1669,7 @@ VIEWS.participants=()=>{
   if(hid.length&&ps.length) h+=`<p class="note hidcols" title="${esc(hid.join(', '))}">빈 칸이라 숨긴 열: ${esc(hid.join(' · '))} <span class="mute">— 내용이 생기면 자동으로 나타납니다</span></p>`;
   h+=`<div class="tbl-wrap plist"><table class="tbl"><thead><tr><th class="c"><input type="checkbox" id="selAll" data-chg="selAll" ${ps.length&&ps.every(p=>ui.sel.has(p.id))?'checked':''} aria-label="전체 선택"></th><th class="num">No</th>
     ${th('name',L('f.name'))}${th('phone',L('f.phone'))}${cols.map(c=>th(c[0],c[1])).join('')}${lfx.map(f=>`<th>${esc(f.label)}</th>`).join('')}
-    ${mod(prog,'group')?`<th class="num">${esc(L('f.headcount'))}</th>`:''}${th('cohort',L('f.cohort'))}${hfTh(prog)}${mod(prog,'fee')?'<th>참가비</th>':''}${mod(prog,'deposit')?hfDepTh(prog):''}${showCk?'<th class="c">체크인</th>':''}${showRoom?`<th>${esc(L('f.room'))}</th>`:''}${showAtt?'<th class="c">출석</th>':''}${showSv?'<th class="c">만족도</th>':''}${th('appliedAt',L('f.appliedAt'))}</tr></thead><tbody>`;
+    ${mod(prog,'group')?`<th class="num">${esc(L('f.headcount'))}</th>`:''}${th('cohort',L('f.cohort'))}${hfTh(prog)}${mod(prog,'fee')?'<th>참가비</th>':''}${mod(prog,'deposit')?hfDepTh(prog):''}${hfCell('sa','입금안내','',SMS_ITEMS,ui.sa)}${hfCell('sc','확정문자','',SMS_ITEMS,ui.sc)}${showCk?'<th class="c">체크인</th>':''}${showRoom?`<th>${esc(L('f.room'))}</th>`:''}${showAtt?'<th class="c">출석</th>':''}${showSv?'<th class="c">만족도</th>':''}${th('appliedAt',L('f.appliedAt'))}</tr></thead><tbody>`;
   if(!ps.length) h+=`<tr><td colspan="30" class="empty">조건에 맞는 참여자가 없습니다.</td></tr>`;
   // 상태·회차로 정렬하면 묶음 제목을 끼워 한눈에
   const k=ui.sort.key; const grpOf=k==='status'?(p=>optLabel('status',p.status)):k==='cohort'?(p=>cohortShort2(p)||'회차 없음'):null; const gcount={}; if(grpOf) ps.forEach(p=>{ const g=grpOf(p); gcount[g]=(gcount[g]||0)+1; }); const useGrp=grpOf&&Object.keys(gcount).length>1;
@@ -1668,21 +1680,23 @@ VIEWS.participants=()=>{
       <td class="nw"><b>${esc(p.name)}</b>${histBadge(p)}${dups.has(p.id)?' <span class="b bad" title="같은 사업에 같은 전화번호가 있습니다">중복?</span>':''}</td><td class="nw">${esc(maskPhone(p.phone))}</td>
       ${cols.map(c=>`<td class="cl2" title="${esc(p[c[0]]||'')}"><div>${esc(p[c[0]]||'')}</div></td>`).join('')}
       ${lfx.map(f=>{ if(f.trackId && f.trackId!==p.trackId) return '<td></td>'; if(f.type==='select'||f.type==='multi'){ const t=fieldText(f,p); return `<td class="chips-inline cl2" title="${esc(t)}">${t?t.split(', ').map(x=>`<span class="b c">${esc(x)}</span>`).join(''):''}</td>`; } const t=fieldText(f,p); return `<td class="cl2" title="${esc(t)}"><div>${esc(t)}</div></td>`; }).join('')}
-      ${mod(prog,'group')?`<td class="num">${seats(p)}${p.groupName?`<div class="note">${esc(p.groupName)}</div>`:''}</td>`:''}<td class="nw">${esc(cohortShort2(p))}</td><td class="nw">${statusBtn(p)}</td>${mod(prog,'fee')?`<td class="nw">${feeBadge(p)}</td>`:''}${mod(prog,'deposit')?`<td class="nw">${depositBtn(p)}</td>`:''}
+      ${mod(prog,'group')?`<td class="num">${seats(p)}${p.groupName?`<div class="note">${esc(p.groupName)}</div>`:''}</td>`:''}<td class="nw">${esc(cohortShort2(p))}</td><td class="nw">${statusBtn(p)}</td>${mod(prog,'fee')?`<td class="nw">${feeBadge(p)}</td>`:''}${mod(prog,'deposit')?`<td class="nw">${depositBtn(p)}</td>`:''}<td class="nw">${smsBtn(p,'smsApply')}</td><td class="nw">${smsBtn(p,'smsConfirm')}</td>
       ${showCk?`<td class="c nw">${p.checkedIn?'<span class="b ok">완료</span>':''}</td>`:''}${showRoom?`<td class="nw">${esc(roomName(coll('rooms')[p.roomId]))}</td>`:''}
       ${showAtt?`<td class="c nw">${st.marked?`<span class="b ${comp==='수료'?'ok':comp==='미수료'?'bad':''}">${Math.round(st.present/st.total*100)}%${comp==='수료'?' 수료':comp==='미수료'?' 미수료':''}</span>`:''}</td>`:''}
       ${showSv?`<td class="c">${Number(p.score)>=1?esc(p.score):''}</td>`:''}
       <td class="nw note" title="${esc(p.appliedAt||'')}">${esc(fmtApplied(p.appliedAt))}</td></tr>`; });
   h+=`</tbody></table></div>`;
-  let lastM=null; h+=`<div class="mcards">${ps.map(p=>{ let gh=''; if(useGrp){ const g=grpOf(p); if(g!==lastM){ lastM=g; gh=`<div class="mgrp"><b>${esc(g)}</b> <span>${gcount[g]}명</span></div>`; } } return gh+`<div class="mcard ${isActive(p)?'':'dim'}" data-act="editP" data-id="${esc(p.id)}"><div class="mtop"><b>${esc(p.name)}</b>${statusBtn(p)}${histBadge(p)}</div><div class="note">${esc(cohortShort2(p))} · ${esc(maskPhone(p.phone))}${p.org?' · '+esc(p.org):''}</div><div class="mtags">${mod(prog,'deposit')?depositBtn(p):''}${p.checkedIn?'<span class="b ok">체크인</span>':''}${hasRoom(p)?`<span class="b">${esc(roomName(coll('rooms')[p.roomId]))}</span>`:''}</div></div>`; }).join('')||'<div class="empty">조건에 맞는 참여자가 없습니다.</div>'}</div>`;
+  let lastM=null; h+=`<div class="mcards">${ps.map(p=>{ let gh=''; if(useGrp){ const g=grpOf(p); if(g!==lastM){ lastM=g; gh=`<div class="mgrp"><b>${esc(g)}</b> <span>${gcount[g]}명</span></div>`; } } return gh+`<div class="mcard ${isActive(p)?'':'dim'}" data-act="editP" data-id="${esc(p.id)}"><div class="mtop"><b>${esc(p.name)}</b>${statusBtn(p)}${histBadge(p)}</div><div class="note">${esc(cohortShort2(p))} · ${esc(maskPhone(p.phone))}${p.org?' · '+esc(p.org):''}</div><div class="mtags">${mod(prog,'deposit')?depositBtn(p):''}<span class="note">입금안내</span>${smsBtn(p,'smsApply')}<span class="note">확정</span>${smsBtn(p,'smsConfirm')}${p.checkedIn?'<span class="b ok">체크인</span>':''}${hasRoom(p)?`<span class="b">${esc(roomName(coll('rooms')[p.roomId]))}</span>`:''}</div></div>`; }).join('')||'<div class="empty">조건에 맞는 참여자가 없습니다.</div>'}</div>`;
   h+=`<p class="note">표시 ${ps.length}명 · 이 사업 전체 ${partsOf(prog.id).length}명</p>`;
   return h;
 };
-function mGet(g){ return g==='coh'?selCohorts().slice():g==='st'?ui.status.slice():g==='dp'?ui.dep.slice():ui.pfilter.slice(); }
+function mGet(g){ return g==='coh'?selCohorts().slice():g==='st'?ui.status.slice():g==='dp'?ui.dep.slice():g==='sa'?ui.sa.slice():g==='sc'?ui.sc.slice():ui.pfilter.slice(); }
 function mSet(g,arr,fromHdr){
   if(g==='coh'){ ui.pcoh[cohortKey()]=arr; ui.cohort[cohortKey()]=arr.length===1?arr[0]:'all'; }
   else if(g==='st'){ ui.status=arr; if(arr.length===1&&arr[0]==='waitlist'&&ui.sort.key==='appliedAt') ui.sort={key:'wait',dir:1}; }
   else if(g==='dp') ui.dep=arr;
+  else if(g==='sa') ui.sa=arr;
+  else if(g==='sc') ui.sc=arr;
   else ui.pfilter=arr;
   if(!fromHdr) ui.mOpen=g; ui.hfAt=Date.now(); ui.sel.clear(); render();
 }
@@ -1713,12 +1727,12 @@ ACT.bulkApply=async()=>{
   commit(ops,`일괄 변경 ${ids.length}명: ${st?'상태→'+optLabel('status',st):''} ${co?'회차→'+cohortLabel(coll('cohorts')[co]):''}`); ui.sel.clear(); render(); toast('적용했습니다.','ok');
 };
 ACT.bulkFlag=el=>{ const k=el.dataset.k, ids=[...ui.sel].filter(id=>coll('participants')[id]);
-  commit(ids.map(id=>{ const p=coll('participants')[id]; const f={[k]:true}; if(k==='depositPaid'&&!p.depositDate) f.depositDate=todayStr(); return {op:'patch',c:'participants',id,f}; }),`일괄 표시(${LABEL_OF[k]||k}) ${ids.length}명`); ui.sel.clear(); render(); toast('표시했습니다.','ok'); };
+  commit(ids.map(id=>{ const p=coll('participants')[id]; const f={[k]:true}; if(k==='depositPaid'&&!p.depositDate) f.depositDate=todayStr(); if(k==='smsApply'||k==='smsConfirm') f[k+'At']=nowStr(); return {op:'patch',c:'participants',id,f}; }),`일괄 표시(${LABEL_OF[k]||k}) ${ids.length}명`); ui.sel.clear(); render(); toast('표시했습니다.','ok'); };
 ACT.bulkDelete=async()=>{ if(!await requireAdmin()) return; const ids=[...ui.sel].filter(id=>coll('participants')[id]);
   if(!await confirmBox('삭제',`선택한 ${ids.length}명을 완전히 삭제합니다. 출결 기록도 함께 지워지며 되돌릴 수 없습니다.\n취소한 사람은 삭제하지 말고 상태를 '취소'로 바꾸는 것을 권장합니다.`,'삭제',true)) return;
   commit(ids.flatMap(id=>delParticipantOps(id)),`참여자 삭제 ${ids.length}명: ${ids.map(id=>coll('participants')[id].name).join(', ')}`); ui.sel.clear(); render(); };
 function delParticipantOps(id){ return [{op:'del',c:'participants',id},...Object.values(coll('attendance')).filter(a=>a.pid===id).map(a=>({op:'del',c:'attendance',id:a.id})),...partLinkedDel(id)]; }
-const LABEL_OF={name:'이름',phone:'전화',gender:'성별',age:'연령대',region:'지역',org:'소속',email:'이메일',trackId:'과정',cohortId:'회차',status:'상태',appliedAt:'신청일시',source:'신청경로',privacy:'동의',marketing:'수신동의',depositPaid:'입금',depositDate:'입금일',depositor:'입금자',refundBank:'은행',refundAccount:'계좌',refundHolder:'예금주',refundStatus:'환불상태',refundDate:'환불일',refundMemo:'환불메모',checkedIn:'체크인',checkinAt:'체크인시각',roomId:'숙소',car:'차량',diet:'식사',noticeSent:'안내',score:'만족도',comment:'의견',certIssued:'수료증',memo:'메모'};
+const LABEL_OF={name:'이름',phone:'전화',gender:'성별',age:'연령대',region:'지역',org:'소속',email:'이메일',trackId:'과정',cohortId:'회차',status:'상태',appliedAt:'신청일시',source:'신청경로',privacy:'동의',marketing:'수신동의',depositPaid:'입금',depositDate:'입금일',depositor:'입금자',refundBank:'은행',refundAccount:'계좌',refundHolder:'예금주',refundStatus:'환불상태',refundDate:'환불일',refundMemo:'환불메모',checkedIn:'체크인',checkinAt:'체크인시각',roomId:'숙소',car:'차량',diet:'식사',noticeSent:'안내',smsApply:'입금안내문자',smsConfirm:'확정문자',score:'만족도',comment:'의견',certIssued:'수료증',memo:'메모'};
 
 /* ---------- 참여자 입력창 ---------- */
 function fld(key,inner,o){ o=o||{}; return `<label class="fld ${o.full?'full':''}" data-f="${key}"><span>${esc(o.label||L('f.'+key))}${o.req?' <b class="req">*</b>':''}</span>${inner}<small class="errmsg"></small></label>`; }
@@ -1789,6 +1803,7 @@ function openParticipant(id,preset){
     ${core('diet')?fld('diet',`<input type="text" name="diet" value="${esc(p.diet||'')}">`,{full:true}):''}
    </div></fieldset>`:''}
    <fieldset><legend>${esc(L('sec.after'))}</legend><div class="fgrid">
+    <div class="fld">${chk('smsApply',p.smsApply,L('f.smsApply'))}</div><div class="fld">${chk('smsConfirm',p.smsConfirm,L('f.smsConfirm'))}</div>
     <div class="fld">${chk('noticeSent',p.noticeSent,L('f.notice'))}</div>
     ${mod(prog,'cert')?`<div class="fld">${chk('certIssued',p.certIssued,L('f.cert'))}</div>`:''}
     ${mod(prog,'survey')?fld('score',`<select name="score"><option value="">미응답</option>${[5,4,3,2,1].map(n=>`<option value="${n}" ${+p.score===n?'selected':''}>${n}점</option>`).join('')}</select>`)+fld('comment',`<input type="text" name="comment" value="${esc(p.comment||'')}">`,{full:true}):''}
@@ -1832,7 +1847,7 @@ async function saveParticipant(m,form,p,orig,isNew,prog){
   const fd=new FormData(form); const g=k=>String(fd.get(k)==null?'':fd.get(k)).trim(); const b=k=>!!form.querySelector(`input[name="${k}"]`)?.checked; const has=k=>!!form.querySelector(`[name="${k}"]`);
   const v={name:g('name'),phone:fmtPhone(g('phone')),trackId:g('trackId'),cohortId:g('cohortId'),status:g('status')||'applied',appliedAt:g('appliedAt'),noticeSent:b('noticeSent'),memo:String(fd.get('memo')||'')};
   ['gender','age','region','org','email','source','diet','depositDate','depositor','refundBank','refundAccount','refundHolder','refundStatus','refundDate','refundMemo','roomId','comment','groupName'].forEach(k=>{ if(has(k)) v[k]=g(k); });
-  ['privacy','marketing','car','depositPaid','checkedIn','certIssued'].forEach(k=>{ if(has(k)) v[k]=b(k); });
+  ['privacy','marketing','car','depositPaid','checkedIn','certIssued','smsApply','smsConfirm'].forEach(k=>{ if(has(k)) v[k]=b(k); });
   if(has('score')) v.score=g('score')?Number(g('score')):'';
   if(has('headcount')) v.headcount=parseInt(g('headcount'),10)||0;
   const cc=coll('cohorts')[v.cohortId]; if(cc) v.trackId=cc.trackId;
@@ -1857,6 +1872,7 @@ async function saveParticipant(m,form,p,orig,isNew,prog){
     if(r==='cancel'||r===false) return; if(r==='wait') v.status='waitlist'; }
   if(!isNew && orig.cohortId!==v.cohortId && v.roomId && v.roomId===orig.roomId){ v.roomId=''; toast('회차가 바뀌어 숙소 배정을 해제했습니다.'); }
   let attDel=[]; if(!isNew && orig.cohortId!==v.cohortId){ attDel=Object.values(coll('attendance')).filter(a=>a.pid===p.id&&a.status); if(attDel.length){ const r=await ask('출결 기록',`회차를 바꾸면 이전 회차(${esc(cohortLabel(cohortOf(orig)))})의 출결 기록 ${attDel.length}건이 새 회차에 잘못 붙습니다. 지울까요?`,[{label:'저장 취소',value:false},{label:'남기기',value:'keep'},{label:'지우기',value:'del',cls:'primary'}]); if(!r) return; if(r!=='del') attDel=[]; } }
+  ['smsApply','smsConfirm'].forEach(k=>{ if(k in v){ if(v[k]&&!(orig&&orig[k])) v[k+'At']=nowStr(); if(!v[k]) v[k+'At']=''; } });
   if('checkedIn' in v){ if(v.checkedIn && !(orig&&orig.checkedIn)) v.checkinAt=nowStr(); if(!v.checkedIn) v.checkinAt=''; }
   if('depositPaid' in v){ if(v.depositPaid && !v.depositDate) v.depositDate=todayStr();
     if(v.checkedIn && v.depositPaid && (v.refundStatus==='none'||!v.refundStatus)) v.refundStatus='pending';
@@ -2307,7 +2323,7 @@ async function saveWb(wb,name){ const buf=await wb.xlsx.writeBuffer(); downloadB
 function fileStamp(){ return nowStr().replace(/[-: ]/g,'').slice(0,12); }
 function safeName(s){ return String(s||'').replace(/[\\\/:*?"<>|]/g,' ').trim().slice(0,60); }
 function partHeaders(prog,tid){ const h=['연번']; if(multiTrack(prog.id)) h.push(L('f.track',prog)); h.push(L('f.cohort',prog),L('f.status',prog),'대기순번',L('f.name',prog),L('f.phone',prog));
-  if(mod(prog,'group')) h.push(L('f.groupName',prog),L('f.headcount',prog)); CORE.forEach(c=>{ if(coreOn(prog,c.k)) h.push(L('f.'+c.k,prog)); }); fieldsOf(prog.id,tid||'all',true).forEach(f=>h.push(f.label)); h.push(L('f.appliedAt',prog),L('f.notice',prog));
+  if(mod(prog,'group')) h.push(L('f.groupName',prog),L('f.headcount',prog)); CORE.forEach(c=>{ if(coreOn(prog,c.k)) h.push(L('f.'+c.k,prog)); }); fieldsOf(prog.id,tid||'all',true).forEach(f=>h.push(f.label)); h.push(L('f.appliedAt',prog),L('f.notice',prog),L('f.smsApply',prog),L('f.smsConfirm',prog));
   if(mod(prog,'deposit')) h.push(L('f.depositPaid',prog),L('f.depositDate',prog),L('f.depositor',prog),L('f.refundBank',prog),L('f.refundAccount',prog),L('f.refundHolder',prog),L('f.refundStatus',prog),L('f.refundDate',prog),L('f.refundMemo',prog));
   if(mod(prog,'checkin')) h.push(L('f.checkedIn',prog),'체크인 시각'); if(mod(prog,'lodging')) h.push(L('f.room',prog)); if(mod(prog,'attendance')) h.push('출석률','수료 여부'); if(mod(prog,'cert')) h.push(L('f.cert',prog)); if(mod(prog,'survey')) h.push(L('f.score',prog),L('f.comment',prog));
   if(mod(prog,'fee')) h.push('참가비(원)','참가비 상태','납부일'); if(mod(prog,'stamp')) h.push('쿠폰 번호','스탬프 수','경품');
@@ -2316,7 +2332,7 @@ function partRow(prog,tid,p,i,mask){ const o=b=>b?'O':''; const c=cohortOf(p); c
   r.push(c?`${c.name}(${fmtDate(c.start)})`:'',optLabel('status',p.status),waitNo(p)||'',p.name||'',mask?fmtPhone(p.phone).replace(/-(\d{3,4})-/,'-****-'):fmtPhone(p.phone));
   if(mod(prog,'group')) r.push(p.groupName||'',seats(p));
   CORE.forEach(cf=>{ if(!coreOn(prog,cf.k)) return; const v=p[cf.k]; if(['privacy','marketing','car'].includes(cf.k)) r.push(o(v)); else if(cf.k==='gender') r.push(optLabel('gender',v||'')); else if(cf.k==='age') r.push(v?optLabel('age',v):''); else if(cf.k==='source') r.push(v?optLabel('source',v):''); else r.push(v||''); });
-  fieldsOf(prog.id,tid||'all',true).forEach(f=>r.push(fieldText(f,p))); r.push(p.appliedAt||'',o(p.noticeSent));
+  fieldsOf(prog.id,tid||'all',true).forEach(f=>r.push(fieldText(f,p))); r.push(p.appliedAt||'',o(p.noticeSent),o(p.smsApply),o(p.smsConfirm));
   if(mod(prog,'deposit')){ const acct=mask&&p.refundAccount?'*'.repeat(Math.max(0,digits(p.refundAccount).length-4))+digits(p.refundAccount).slice(-4):(p.refundAccount||''); r.push(o(p.depositPaid),p.depositDate||'',p.depositor||'',p.refundBank||'',acct,p.refundHolder||'',optLabel('refund',p.refundStatus||'none'),p.refundDate||'',p.refundMemo||''); }
   if(mod(prog,'checkin')) r.push(o(p.checkedIn),p.checkinAt||''); if(mod(prog,'lodging')) r.push(roomName(coll('rooms')[p.roomId])); if(mod(prog,'attendance')){ const st=attStats(p); r.push(st.marked?Math.round(st.present/st.total*100)+'%':'',completion(p)); }
   if(mod(prog,'cert')) r.push(o(p.certIssued)); if(mod(prog,'survey')) r.push(Number(p.score)>=1?Number(p.score):'',p.comment||'');
@@ -2496,17 +2512,20 @@ ACT.msgs=()=>{
   if(!ids.length){ toast('대상이 없습니다.'); return; }
   const tpls=progTemplates(prog); const tid=(ui.tplId&&tpls.find(t=>t.id===ui.tplId))?ui.tplId:(tpls[0]||{}).id;
   const m=openModal(`<h3>안내 문자 만들기 <span class="b c">${ids.length}명</span></h3><p class="note">${ui.sel.size?'선택한 사람':'지금 목록에 보이는 사람(취소자 제외)'}에게 보낼 문구를 사람마다 만듭니다. 문구는 [${esc(L('nav.setup'))} → 안내 문자 문구]에서 고칩니다.</p>
-   <div class="toolbar"><select id="msg-t">${tpls.map(t=>`<option value="${esc(t.id)}" ${t.id===tid?'selected':''}>${esc(t.title)}</option>`).join('')}</select><span class="grow"></span><button class="btn" data-x="xlsx">단체문자용 엑셀</button><button class="btn" data-x="mark">모두 '${esc(L('f.notice'))}' 표시</button></div>
+   <div class="toolbar"><select id="msg-t">${tpls.map(t=>`<option value="${esc(t.id)}" ${t.id===tid?'selected':''}>${esc(t.title)}</option>`).join('')}</select><span class="grow"></span><button class="btn" data-x="xlsx">단체문자용 엑셀</button><button class="btn" data-x="mark" id="msg-mark"></button></div>
    <div id="msg-warn"></div><div id="msg-list" class="msg-list"></div><div class="modal-foot"><button class="btn" data-x="close">닫기</button></div>`,{wide:true});
   const cur=()=>tpls.find(x=>x.id===$('#msg-t',m).value)||tpls[0];
+  const mk=()=>{ const t=cur(); const k=t.id==='apply'?'smsApply':t.id==='confirm'?'smsConfirm':'noticeSent'; return {k,label:k==='noticeSent'?L('f.notice'):L('f.'+k)}; };
   const draw=()=>{ const t=cur(); ui.tplId=t.id; const miss=new Set();
-    $('#msg-list',m).innerHTML=ids.map(id=>coll('participants')[id]).filter(Boolean).map(p=>{ const r=fillTpl(t.body,p); r.missing.forEach(k=>miss.add(k)); return `<div class="msg"><div class="mh"><b>${esc(p.name)}</b><span class="note">${esc(fmtPhone(p.phone))} · ${esc(cohortShort2(p))}</span>${p.noticeSent?`<span class="b ok">${esc(L('f.notice'))}</span>`:''}<span class="grow"></span><button class="btn sm" data-copy="${esc(p.id)}">문구 복사</button></div><pre>${esc(r.text)}</pre></div>`; }).join('');
+    $('#msg-list',m).innerHTML=ids.map(id=>coll('participants')[id]).filter(Boolean).map(p=>{ const r=fillTpl(t.body,p); r.missing.forEach(k=>miss.add(k)); return `<div class="msg"><div class="mh"><b>${esc(p.name)}</b><span class="note">${esc(fmtPhone(p.phone))} · ${esc(cohortShort2(p))}</span>${p[mk().k]?`<span class="b ok">${esc(mk().label)} 발송완료</span>`:'<span class="b warn">미발송</span>'}<span class="grow"></span><button class="btn sm" data-copy="${esc(p.id)}">문구 복사</button><button class="btn sm" data-sent="${esc(p.id)}">${p[mk().k]?'발송 취소':'발송완료 ✓'}</button></div><pre>${esc(r.text)}</pre></div>`; }).join('');
+    $('#msg-mark',m).textContent=`모두 '${mk().label}' 발송완료 표시`;
     const ms=[...miss]; $('#msg-warn',m).innerHTML=ms.length?`<div class="warnbox">비어 있는 값: ${ms.map(k=>`<b>{${esc(k)}}</b>`).join(' ')}${ms.some(k=>['입금계좌','문의처','장소'].includes(k))?` — [${esc(L('nav.setup'))} → 운영 기준]에서 입금 계좌·문의처·장소를 넣어 주세요.`:''}</div>`:''; };
   draw(); $('#msg-t',m).onchange=draw;
   m.addEventListener('click',async e=>{ const b=e.target.closest('button'); if(!b) return;
     if(b.dataset.x==='close'){ closeModal(m); return; }
     if(b.dataset.copy){ const p=coll('participants')[b.dataset.copy]; if(!p) return; const ok=await copyText(fillTpl(cur().body,p).text); if(ok){ b.textContent='복사됨 ✓'; b.classList.add('primary'); } toast(ok?`${p.name}님 문구를 복사했습니다.`:'복사하지 못했습니다.',ok?'ok':'err'); return; }
-    if(b.dataset.x==='mark'){ const todo=ids.filter(id=>coll('participants')[id]&&!coll('participants')[id].noticeSent); if(!todo.length){ toast('이미 모두 표시되어 있습니다.'); return; } commit(todo.map(id=>({op:'patch',c:'participants',id,f:{noticeSent:true,noticeAt:nowStr()}})),`안내 발송 표시 ${todo.length}명 (${cur().title})`); draw(); toast(`${todo.length}명을 표시했습니다.`,'ok'); return; }
+    if(b.dataset.sent){ const p=coll('participants')[b.dataset.sent]; if(!p) return; const {k,label}=mk(); const on=!p[k]; commit([{op:'patch',c:'participants',id:p.id,f:{[k]:on,[k+'At']:on?nowStr():''}}],`${p.name} ${label} ${on?'발송완료':'발송표시 취소'}`,p.id); draw(); return; }
+    if(b.dataset.x==='mark'){ const {k,label}=mk(); const todo=ids.filter(id=>coll('participants')[id]&&!coll('participants')[id][k]); if(!todo.length){ toast('이미 모두 표시되어 있습니다.'); return; } commit(todo.map(id=>({op:'patch',c:'participants',id,f:{[k]:true,[k+'At']:nowStr()}})),`${label} 발송완료 표시 ${todo.length}명 (${cur().title})`); draw(); toast(`${todo.length}명을 표시했습니다.`,'ok'); return; }
     if(b.dataset.x==='xlsx'){ try{ const t=cur(); const wb=new ExcelJS.Workbook(); const ws=addSheet(wb,'단체문자',['이름','휴대폰','문구'],ids.map(id=>coll('participants')[id]).filter(Boolean).map(p=>[p.name,fmtPhone(p.phone),fillTpl(t.body,p).text]),'FF5B6472'); ws.getColumn(3).width=70; ws.getColumn(3).alignment={wrapText:true,vertical:'top'}; await saveWb(wb,`안내문자_${safeName(t.title)}_${fileStamp()}.xlsx`); toast('엑셀을 만들었습니다.','ok'); }catch(err){ toast('실패: '+err.message,'err'); } } }); };
 
 /* ---------- 인쇄 ---------- */
