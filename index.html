@@ -72,6 +72,13 @@ h4{margin:0}
 /* ---------- 도구줄 ---------- */
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
 .toolbar .grow{flex:1}
+.tbl th .hf{margin-left:6px;padding:1px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--mute);font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;vertical-align:middle}
+.tbl th .hf:hover{color:var(--c);border-color:var(--c)}
+.tbl th .hf.on{background:var(--c2);border-color:var(--c);color:var(--cdark)}
+.hfpanel{position:fixed;z-index:60;min-width:200px;max-width:min(320px,92vw);max-height:340px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--shadow);padding:6px;text-align:left;font-weight:400;font-size:13.5px;color:var(--ink);white-space:normal;margin-top:8px}
+.hfpanel label{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer}
+.hfpanel label:hover{background:var(--line2)}
+.hfpanel .btn{margin:6px 4px 2px}
 .msel{position:relative}
 .msel>summary{list-style:none;cursor:pointer;padding:8px 32px 8px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--card);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;position:relative;min-height:36px}
 .msel>summary::-webkit-details-marker{display:none}
@@ -1084,7 +1091,7 @@ let conf = Object.assign({mode:'local', apiUrl:'https://hwangchon-edu-b386a-defa
 /* 링크로 접근키 자동 입력: …/edu-management/#k=접근키 (주소 # 뒤 값은 서버로 전송되지 않고, 입력 후 주소창에서 지워집니다) */
 (function(){ try{ const m=/[#&]k=([A-Za-z0-9_-]{12,})/.exec(location.hash); if(m){ conf.key=m[1]; saveJSON(K.conf,conf); history.replaceState(null,'',location.pathname+location.search); } }catch(e){} })();
 let state, pending=[];
-const ui = { area:'global', gtab:'home', ptab:'dashboard', pid:'', tid:'all', cohort:{}, status:[], pfilter:[], pcoh:{}, mOpen:'', q:'', ckq:'', sort:{key:'appliedAt',dir:1}, sel:new Set(), mask:false, needsRender:false, depFilter:'all', open:{}, tplId:'', roomDraft:null, year:'all', peopleQ:'', notice:'' };
+const ui = { area:'global', gtab:'home', ptab:'dashboard', pid:'', tid:'all', cohort:{}, status:[], pfilter:[], pcoh:{}, mOpen:'', hfOpen:'', hfAt:0, q:'', ckq:'', sort:{key:'appliedAt',dir:1}, sel:new Set(), mask:false, needsRender:false, depFilter:'all', open:{}, tplId:'', roomDraft:null, year:'all', peopleQ:'', notice:'' };
 (function(){ const u=loadJSON(K.ui,SS)||loadJSON(K.ui); if(u){ ['area','gtab','ptab','pid','tid','year'].forEach(k=>{ if(u[k]!=null) ui[k]=u[k]; }); } })();
 function saveUi(){ const v={area:ui.area,gtab:ui.gtab,ptab:ui.ptab,pid:ui.pid,tid:ui.tid,year:ui.year}; saveJSON(K.ui,v,SS); saveJSON(K.ui,v); }
 let saving=false, saveAgain=false, lastSaveErr='';
@@ -1588,6 +1595,12 @@ function msel(g,allLabel,items,sel){
   const text=n===0?allLabel:(n===1?first:`${first} 외 ${n-1}`);
   return `<details class="msel ${n?'on':''}" data-g="${g}" ${ui.mOpen===g?'open':''}><summary>${esc(text)}</summary><div class="mpanel">${items.map(i=>`<label><input type="checkbox" data-chg="mSel" data-g="${g}" data-v="${esc(i.id)}" ${sel.includes(i.id)?'checked':''}> <span>${esc(i.label)}</span></label>`).join('')}${n?`<button class="btn sm ghost" data-act="mClear" data-g="${g}">선택 해제</button>`:''}</div></details>`;
 }
+/* 상태 열 머리글 필터 (표 머리글의 ▾ 버튼 → 체크 목록) */
+function hfTh(prog){
+  const n=ui.status.length, items=[{id:'active',label:'참여(접수+확정)'}].concat(optList('status').map(o=>({id:o.id,label:o.label})));
+  const panel=ui.hfOpen==='st'?`<div class="hfpanel" role="dialog" aria-label="상태 필터">${items.map(i=>`<label><input type="checkbox" data-chg="mSel" data-g="st" data-v="${esc(i.id)}" data-src="hdr" ${ui.status.includes(i.id)?'checked':''}> <span>${esc(i.label)}</span></label>`).join('')}${n?`<button class="btn sm ghost" data-act="mClear" data-g="st" data-src="hdr">선택 해제</button>`:''}</div>`:'';
+  return `<th class="sortable"><span data-act="sort" data-k="status">${esc(L('f.status'))}${ui.sort.key==='status'?(ui.sort.dir>0?' ▲':' ▼'):''}</span><button type="button" class="hf ${n?'on':''}" data-act="hfOpen" data-g="st" title="상태 필터" aria-label="상태 필터">${n?'● '+n:'▾'}</button>${panel}</th>`;
+}
 function filteredParts(){
   const prog=P(), tid=curTid(), cids=selCohorts();
   let ps=partsOf(prog.id,tid); if(cids.length) ps=ps.filter(p=>cids.includes(p.cohortId));
@@ -1636,7 +1649,7 @@ VIEWS.participants=()=>{
   if(hid.length&&ps.length) h+=`<p class="note hidcols" title="${esc(hid.join(', '))}">빈 칸이라 숨긴 열: ${esc(hid.join(' · '))} <span class="mute">— 내용이 생기면 자동으로 나타납니다</span></p>`;
   h+=`<div class="tbl-wrap plist"><table class="tbl"><thead><tr><th class="c"><input type="checkbox" id="selAll" data-chg="selAll" ${ps.length&&ps.every(p=>ui.sel.has(p.id))?'checked':''} aria-label="전체 선택"></th><th class="num">No</th>
     ${th('name',L('f.name'))}${th('phone',L('f.phone'))}${cols.map(c=>th(c[0],c[1])).join('')}${lfx.map(f=>`<th>${esc(f.label)}</th>`).join('')}
-    ${mod(prog,'group')?`<th class="num">${esc(L('f.headcount'))}</th>`:''}${th('cohort',L('f.cohort'))}${th('status',L('f.status'))}${mod(prog,'fee')?'<th>참가비</th>':''}${mod(prog,'deposit')?`<th>${esc(L('sec.deposit'))}</th>`:''}${showCk?'<th class="c">체크인</th>':''}${showRoom?`<th>${esc(L('f.room'))}</th>`:''}${showAtt?'<th class="c">출석</th>':''}${showSv?'<th class="c">만족도</th>':''}${th('appliedAt',L('f.appliedAt'))}</tr></thead><tbody>`;
+    ${mod(prog,'group')?`<th class="num">${esc(L('f.headcount'))}</th>`:''}${th('cohort',L('f.cohort'))}${hfTh(prog)}${mod(prog,'fee')?'<th>참가비</th>':''}${mod(prog,'deposit')?`<th>${esc(L('sec.deposit'))}</th>`:''}${showCk?'<th class="c">체크인</th>':''}${showRoom?`<th>${esc(L('f.room'))}</th>`:''}${showAtt?'<th class="c">출석</th>':''}${showSv?'<th class="c">만족도</th>':''}${th('appliedAt',L('f.appliedAt'))}</tr></thead><tbody>`;
   if(!ps.length) h+=`<tr><td colspan="30" class="empty">조건에 맞는 참여자가 없습니다.</td></tr>`;
   // 상태·회차로 정렬하면 묶음 제목을 끼워 한눈에
   const k=ui.sort.key; const grpOf=k==='status'?(p=>optLabel('status',p.status)):k==='cohort'?(p=>cohortShort2(p)||'회차 없음'):null; const gcount={}; if(grpOf) ps.forEach(p=>{ const g=grpOf(p); gcount[g]=(gcount[g]||0)+1; }); const useGrp=grpOf&&Object.keys(gcount).length>1;
@@ -1658,16 +1671,18 @@ VIEWS.participants=()=>{
   return h;
 };
 function mGet(g){ return g==='coh'?selCohorts().slice():g==='st'?ui.status.slice():ui.pfilter.slice(); }
-function mSet(g,arr){
+function mSet(g,arr,fromHdr){
   if(g==='coh'){ ui.pcoh[cohortKey()]=arr; ui.cohort[cohortKey()]=arr.length===1?arr[0]:'all'; }
   else if(g==='st'){ ui.status=arr; if(arr.length===1&&arr[0]==='waitlist'&&ui.sort.key==='appliedAt') ui.sort={key:'wait',dir:1}; }
   else ui.pfilter=arr;
-  ui.mOpen=g; ui.sel.clear(); render();
+  if(!fromHdr) ui.mOpen=g; ui.hfAt=Date.now(); ui.sel.clear(); render();
 }
-CHG.mSel=el=>{ const g=el.dataset.g, v=el.dataset.v; let a=mGet(g); a=el.checked?(a.includes(v)?a:a.concat(v)):a.filter(x=>x!==v); mSet(g,a); };
-ACT.mClear=el=>{ mSet(el.dataset.g,[]); };
+CHG.mSel=el=>{ const g=el.dataset.g, v=el.dataset.v; let a=mGet(g); a=el.checked?(a.includes(v)?a:a.concat(v)):a.filter(x=>x!==v); mSet(g,a,el.dataset.src==='hdr'); };
+ACT.mClear=el=>{ mSet(el.dataset.g,[],el.dataset.src==='hdr'); };
+ACT.hfOpen=el=>{ ui.hfOpen=(ui.hfOpen===el.dataset.g)?'':el.dataset.g; ui.hfAt=Date.now(); render(); };
+document.addEventListener('scroll',e=>{ if(ui.hfOpen && Date.now()-ui.hfAt>500 && !(e.target.closest&&e.target.closest('.hfpanel'))){ ui.hfOpen=''; render(); } },true);
 document.addEventListener('toggle',e=>{ const d=e.target; if(!d||!d.classList||!d.classList.contains('msel')) return; if(d.open) ui.mOpen=d.dataset.g; else if(ui.mOpen===d.dataset.g) ui.mOpen=''; },true);
-document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.msel')) return; if(!ui.mOpen) return; ui.mOpen=''; document.querySelectorAll('details.msel[open]').forEach(d=>{ d.open=false; }); });
+document.addEventListener('click',e=>{ if(ui.hfOpen && !(e.target.closest&&e.target.closest('.hfpanel,.hf'))){ ui.hfOpen=''; render(); return; } if(e.target.closest&&e.target.closest('.msel')) return; if(!ui.mOpen) return; ui.mOpen=''; document.querySelectorAll('details.msel[open]').forEach(d=>{ d.open=false; }); });
 INP.pSearch=el=>{ ui.q=el.value; render(); };
 CHG.pSort=el=>{ ui.sort={key:el.value,dir:1}; render(); };
 ACT.clearFilter=()=>{ ui.pfilter=[]; render(); };
