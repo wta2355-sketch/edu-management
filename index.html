@@ -1715,7 +1715,7 @@ CHG.selOne=el=>{ if(el.checked) ui.sel.add(el.dataset.id); else ui.sel.delete(el
 ACT.selClear=()=>{ ui.sel.clear(); render(); };
 ACT.editP=(el,e)=>{ if(e.target.closest('[data-stop]')) return; openParticipant(el.dataset.id); };
 ACT.newP=()=>openParticipant(null);
-ACT.copyPhones=async()=>{ const list=[...new Set(filteredParts().filter(p=>p.status!=='cancelled').map(p=>fmtPhone(p.phone)).filter(Boolean))]; if(!list.length){ toast('복사할 연락처가 없습니다.'); return; } const ok=await copyText(list.join('\n')); toast(ok?`연락처 ${list.length}개를 복사했습니다(취소자 제외).`:'복사하지 못했습니다.',ok?'ok':'err'); };
+ACT.copyPhones=async()=>{ const sel=ui.sel.size>0; const base=sel?[...ui.sel].map(id=>coll('participants')[id]).filter(Boolean):filteredParts().filter(p=>p.status!=='cancelled'); const list=[...new Set(base.map(p=>fmtPhone(p.phone)).filter(Boolean))]; if(!list.length){ toast('복사할 연락처가 없습니다.'); return; } const ok=await copyText(list.join(', ')); toast(ok?`연락처 ${list.length}개를 쉼표로 이어 복사했습니다(${sel?'선택한 사람만':'취소자 제외'}).`:'복사하지 못했습니다.',ok?'ok':'err'); };
 ACT.bulkApply=async()=>{
   const st=$('#bulk-status').value, co=$('#bulk-cohort').value; if(!st && !co){ toast('바꿀 상태나 회차를 고르세요.'); return; }
   const ids=[...ui.sel].filter(id=>coll('participants')[id]);
